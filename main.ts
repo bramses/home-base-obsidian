@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, MetadataCache } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -12,6 +12,10 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
+
+	getTextFromPosition (fileText: string, start: number, end: number) {
+		return fileText.substring(start, end);
+	}
 
 	async onload() {
 		await this.loadSettings();
@@ -70,8 +74,30 @@ export default class MyPlugin extends Plugin {
 
 		// If the plugin hooks up any global DOM events (on parts of the app that doesn't belong to this plugin)
 		// Using this function will automatically remove the event listener when this plugin is disabled.
-		this.registerDomEvent(document, 'click', (evt: MouseEvent) => {
+		this.registerDomEvent(document, 'click', async (evt: MouseEvent) => {
 			console.log('click', evt);
+			const noteFile = this.app.workspace.getActiveFile(); // Get the currently Open Note
+			const metadata = this.app.metadataCache.getFileCache(noteFile);
+			const text = await this.app.vault.read(noteFile);
+			// console.log(metadata)
+
+			const blockquotes = metadata.sections.filter(section => section.type === 'blockquote');
+			const paragraphs = metadata.sections.filter(section => section.type === 'paragraph');
+			const lists = metadata.sections.filter(section => section.type === 'list');
+			const codeBlocks = metadata.sections.filter(section => section.type === 'code');
+			const html = metadata.sections.filter(section => section.type === 'html');
+
+			console.log(blockquotes);
+			console.log(paragraphs);
+			console.log(lists);
+			console.log(codeBlocks);
+			console.log(html);
+
+			blockquotes.forEach(section => {
+				const res = this.getTextFromPosition(text, section.position.start.offset, section.position.end.offset);
+				console.log(res);
+			})
+
 		});
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
