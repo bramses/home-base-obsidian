@@ -93,9 +93,9 @@ export default class MyPlugin extends Plugin {
 			console.log(codeBlocks);
 			console.log(html);
 
-			blockquotes.forEach(section => {
+			lists.forEach(section => {
 				const res = this.getTextFromPosition(text, section.position.start.offset, section.position.end.offset);
-				console.log(res);
+				console.log(res.split('\n-'));
 			})
 
 		});
