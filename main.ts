@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, SectionCache, Setting, TFile } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, SectionCache, Setting, TFile, CachedMetadata } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -13,6 +13,10 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 interface ExpandedSectionCache extends SectionCache {
 	text: string;
 }
+
+// TODO: processors for the other types
+// TODO: a button to call sync
+// TODO: settings specified filters
 
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
@@ -64,6 +68,7 @@ export default class MyPlugin extends Plugin {
 
 		files.forEach(file => {
 			console.log('Syncing file: ' + file.path);
+
 		});
 	}
 
@@ -83,6 +88,33 @@ export default class MyPlugin extends Plugin {
 		});
 
 		return processedBlockquotes;
+	}
+
+	async getMetadataAndTextFromFile(file: TFile) {
+		if (file == null) {
+			console.log('File is null');
+			return {
+				metadata: null,
+				text: null
+			};
+		}
+
+		if (file.extension !== 'md') {
+			console.log(`File ${file.path} is not a markdown file`);
+			return {
+				metadata: null,
+				text: null
+			};
+		}
+
+		const metadata: CachedMetadata = this.app.metadataCache.getFileCache(file);
+		// console.log(`${file.path} has metadata: ${JSON.stringify(metadata)}`);
+		const text: string = await this.app.vault.read(file);
+
+		return {
+			metadata,
+			text
+		};
 	}
 
 	processCodeBlocks (codeBlocks: SectionCache[], fileText: string): ExpandedSectionCache[] {
@@ -163,32 +195,46 @@ export default class MyPlugin extends Plugin {
 		this.registerDomEvent(document, 'click', async (evt: MouseEvent) => {
 			console.log('click', evt);
 
-			const noteFile = this.app.workspace.getActiveFile(); // Get the currently Open Note
-			const metadata = this.app.metadataCache.getFileCache(noteFile);
-			const text = await this.app.vault.read(noteFile);
-			// console.log(metadata)
-
-			const blockquotes = metadata.sections.filter(section => section.type === 'blockquote');
-			const paragraphs = metadata.sections.filter(section => section.type === 'paragraph');
-			const lists = metadata.sections.filter(section => section.type === 'list');
-			const codeBlocks = metadata.sections.filter(section => section.type === 'code');
-			const html = metadata.sections.filter(section => section.type === 'html');
-
-			console.log(paragraphs);
-			console.log(lists);
-	
-			console.log(html);
-
-			lists.forEach(section => {
-				const res = this.getTextFromPosition(text, section.position.start.offset, section.position.end.offset);
-				console.log(res.split('\n-'));
+			const files = this.getAllActiveFiles();
+			files.forEach(async file => {
+				const { metadata, text } = await this.getMetadataAndTextFromFile(file);
+				if (metadata && metadata.sections) { 
+					const blockquotes = metadata.sections.filter(section => section.type === 'blockquote');
+					const blockQuotesText = this.processBlockQuotes(blockquotes, text);
+					console.log(blockQuotesText);
+				} else {
+					console.log('No metadata found for file: ' + file.path);
+				}
+				
 			})
 
-			const blockquotesText = this.processBlockQuotes(blockquotes, text);
-			console.log(blockquotesText);
 
-			const codeBlocksText = this.processCodeBlocks(codeBlocks, text);
-			console.log(codeBlocksText);
+			// const noteFile = this.app.workspace.getActiveFile(); // Get the currently Open Note
+			// const metadata = this.app.metadataCache.getFileCache(noteFile);
+			// const text = await this.app.vault.read(noteFile);
+			// // console.log(metadata)
+
+			// const blockquotes = metadata.sections.filter(section => section.type === 'blockquote');
+			// const paragraphs = metadata.sections.filter(section => section.type === 'paragraph');
+			// const lists = metadata.sections.filter(section => section.type === 'list');
+			// const codeBlocks = metadata.sections.filter(section => section.type === 'code');
+			// const html = metadata.sections.filter(section => section.type === 'html');
+
+			// console.log(paragraphs);
+			// console.log(lists);
+	
+			// console.log(html);
+
+			// lists.forEach(section => {
+			// 	const res = this.getTextFromPosition(text, section.position.start.offset, section.position.end.offset);
+			// 	console.log(res.split('\n-'));
+			// })
+
+			// const blockquotesText = this.processBlockQuotes(blockquotes, text);
+			// console.log(blockquotesText);
+
+			// const codeBlocksText = this.processCodeBlocks(codeBlocks, text);
+			// console.log(codeBlocksText);
 
 		});
 
