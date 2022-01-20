@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, Setting, MetadataCache } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, PluginSettingTab, SectionCache, Setting, TFile } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -10,11 +10,97 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	mySetting: 'default'
 }
 
+interface ExpandedSectionCache extends SectionCache {
+	text: string;
+}
+
 export default class MyPlugin extends Plugin {
 	settings: MyPluginSettings;
 
-	getTextFromPosition (fileText: string, start: number, end: number) {
-		return fileText.substring(start, end);
+	getTextFromPosition(fileText: string, start: number, end: number) {
+		try {
+			return fileText.substring(start, end);
+		} catch (err) {
+			console.log(err);
+			return '';
+		}
+	}
+
+	getAllActiveFiles() {
+		/*
+		ctime: 1630690494000
+		mtime: 1630800156000
+		size: 1186
+		*/
+
+		try {
+			return this.app.vault.getFiles();
+		} catch (err) {
+			console.log(err);
+			return [];
+		}
+	}
+
+	resyncFilesAfterTimestamp (timestamp: number, files: TFile[]): TFile[] {
+
+		if (files.length === 0) {
+			console.log('No files found');
+			return files;
+		}
+
+		if (timestamp == null) {
+			console.log('Timestamp is null');
+			return files;
+		}
+
+		return files.filter(file => file.stat.mtime > timestamp);
+	}
+
+	syncAllFiles (files: TFile[]) {
+
+		if (files.length === 0) {
+			return;
+		}
+
+		files.forEach(file => {
+			console.log('Syncing file: ' + file.path);
+		});
+	}
+
+	processBlockQuotes (blockquotes: SectionCache[], fileText: string): ExpandedSectionCache[] {
+		const processedBlockquotes: ExpandedSectionCache[] = [];
+		
+		blockquotes.forEach(blockquote => {
+			blockquote
+			processedBlockquotes.push({
+				text: this.getTextFromPosition(
+					fileText, 
+					blockquote.position.start.offset, 
+					blockquote.position.end.offset
+				), 
+				...blockquote
+			});
+		});
+
+		return processedBlockquotes;
+	}
+
+	processCodeBlocks (codeBlocks: SectionCache[], fileText: string): ExpandedSectionCache[] {
+		const processedCodeBlocks: ExpandedSectionCache[] = [];
+		
+		codeBlocks.forEach(codeBlock => {
+			processedCodeBlocks.push({
+				text: this.getTextFromPosition(
+					fileText, 
+					codeBlock.position.start.offset, 
+					codeBlock.position.end.offset
+				),
+				...codeBlock
+			}
+			);
+		});
+
+		return processedCodeBlocks;
 	}
 
 	async onload() {
@@ -76,6 +162,7 @@ export default class MyPlugin extends Plugin {
 		// Using this function will automatically remove the event listener when this plugin is disabled.
 		this.registerDomEvent(document, 'click', async (evt: MouseEvent) => {
 			console.log('click', evt);
+
 			const noteFile = this.app.workspace.getActiveFile(); // Get the currently Open Note
 			const metadata = this.app.metadataCache.getFileCache(noteFile);
 			const text = await this.app.vault.read(noteFile);
@@ -87,10 +174,9 @@ export default class MyPlugin extends Plugin {
 			const codeBlocks = metadata.sections.filter(section => section.type === 'code');
 			const html = metadata.sections.filter(section => section.type === 'html');
 
-			console.log(blockquotes);
 			console.log(paragraphs);
 			console.log(lists);
-			console.log(codeBlocks);
+	
 			console.log(html);
 
 			lists.forEach(section => {
@@ -98,7 +184,15 @@ export default class MyPlugin extends Plugin {
 				console.log(res.split('\n-'));
 			})
 
+			const blockquotesText = this.processBlockQuotes(blockquotes, text);
+			console.log(blockquotesText);
+
+			const codeBlocksText = this.processCodeBlocks(codeBlocks, text);
+			console.log(codeBlocksText);
+
 		});
+
+
 
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
 		this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
@@ -123,12 +217,12 @@ class SampleModal extends Modal {
 	}
 
 	onOpen() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.setText('Woah!');
 	}
 
 	onClose() {
-		const {contentEl} = this;
+		const { contentEl } = this;
 		contentEl.empty();
 	}
 }
@@ -142,11 +236,11 @@ class SampleSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 
 		containerEl.empty();
 
-		containerEl.createEl('h2', {text: 'Settings for my awesome plugin.'});
+		containerEl.createEl('h2', { text: 'Settings for my awesome plugin.' });
 
 		new Setting(containerEl)
 			.setName('Setting #1')
